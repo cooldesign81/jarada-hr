@@ -12,119 +12,149 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 
 <style>
+  /* 자라다(jarada.co.kr) 브랜드 톤 - 딥 네이비 + 웜 오렌지 포인트, 부드러운 라운드 카드 */
   :root{
-    --navy:#1e3a5f;
-    --navy-dark:#152a45;
-    --border:#e2e5ea;
-    --bg:#f5f6f8;
-    --text:#222;
-    --muted:#8a919c;
-    --danger:#c0392b;
-    --ok:#2e7d32;
-    --radius:10px;
+    --navy:#16305c;
+    --navy-dark:#0f2141;
+    --accent:#ff8a3d;
+    --accent-dark:#e8722a;
+    --border:#e7e1d6;
+    --bg:#faf6ef;
+    --card:#ffffff;
+    --text:#2a2a2a;
+    --muted:#96907f;
+    --danger:#d1483a;
+    --ok:#3a8a52;
+    --radius:16px;
+    --radius-sm:10px;
   }
   *{box-sizing:border-box;}
   body{
-    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard","Malgun Gothic",sans-serif;
     background:var(--bg); color:var(--text);
   }
   header{
-    background:var(--navy); color:#fff; padding:14px 18px;
+    background:var(--navy); color:#fff; padding:16px 20px;
     display:flex; align-items:center; justify-content:space-between;
-    position:sticky; top:0; z-index:20;
+    position:sticky; top:0; z-index:30;
+    box-shadow:0 2px 10px rgba(0,0,0,.12);
   }
-  header .title{font-weight:700; font-size:16px; cursor:pointer;}
+  header .title{font-weight:800; font-size:17px; cursor:pointer; letter-spacing:-.3px;}
   header .userinfo{font-size:12px; opacity:.9; display:flex; align-items:center; gap:10px;}
   header button{
-    background:rgba(255,255,255,.15); color:#fff; border:none; padding:6px 10px;
-    border-radius:6px; font-size:12px; cursor:pointer;
+    background:rgba(255,255,255,.15); color:#fff; border:none; padding:7px 12px;
+    border-radius:20px; font-size:12px; cursor:pointer;
   }
-  .badge-admin{background:#e8b93a; color:#3a2c00; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700;}
-  .badge-staff{background:rgba(255,255,255,.2); padding:2px 8px; border-radius:20px; font-size:11px;}
+  .badge-admin{background:var(--accent); color:#3a1c00; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:800;}
+  .badge-staff{background:rgba(255,255,255,.2); padding:3px 10px; border-radius:20px; font-size:11px;}
 
-  .container{max-width:720px; margin:0 auto; padding:16px;}
+  .container{max-width:760px; margin:0 auto; padding:18px;}
   .card{
-    background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-    padding:16px; margin-bottom:14px;
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.03);
   }
-  .card h3{margin:0 0 12px 0; font-size:15px; color:var(--navy-dark); border-bottom:2px solid var(--navy); padding-bottom:8px;}
+  .card h3{margin:0 0 14px 0; font-size:15px; color:var(--navy-dark); border-bottom:2px solid var(--accent); padding-bottom:9px; font-weight:800;}
   .row{display:flex; gap:10px; flex-wrap:wrap;}
   .field{flex:1 1 220px; margin-bottom:10px;}
-  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px;}
-  .field input, .field select{
-    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px;
+    background:#fffdfa;
   }
+  .field input:focus, .field textarea:focus{outline:none; border-color:var(--accent);}
   .btn{
     display:inline-block; background:var(--navy); color:#fff; border:none;
-    padding:10px 16px; border-radius:6px; font-size:14px; cursor:pointer; font-weight:600;
+    padding:11px 18px; border-radius:24px; font-size:14px; cursor:pointer; font-weight:700;
   }
   .btn:hover{background:var(--navy-dark);}
+  .btn.accent{background:var(--accent);}
+  .btn.accent:hover{background:var(--accent-dark);}
   .btn.secondary{background:#fff; color:var(--navy); border:1px solid var(--navy);}
   .btn.danger{background:var(--danger);}
-  .btn.small{padding:6px 10px; font-size:12px;}
+  .btn.small{padding:6px 12px; font-size:12px;}
   .btn:disabled{opacity:.5; cursor:not-allowed;}
 
   #loginScreen{
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     min-height:100vh; padding:20px;
   }
-  #loginScreen .card{width:100%; max-width:360px;}
-  #loginScreen h2{color:var(--navy-dark); text-align:center;}
-  .divider{text-align:center; color:var(--muted); font-size:12px; margin:14px 0; position:relative;}
+  #loginScreen .card{width:100%; max-width:380px;}
+  #loginScreen h2{color:var(--navy-dark); text-align:center; font-weight:800;}
+  .divider{text-align:center; color:var(--muted); font-size:12px; margin:16px 0; position:relative;}
   .divider::before,.divider::after{content:"";position:absolute;top:50%;width:40%;height:1px;background:var(--border);}
   .divider::before{left:0;} .divider::after{right:0;}
 
+  .tabs{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .tab-btn{
+    background:#fff; border:1px solid var(--border); color:var(--muted);
+    padding:9px 16px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .tab-btn.active{background:var(--navy); color:#fff; border-color:var(--navy);}
+
   .emp-list-item{
     display:flex; justify-content:space-between; align-items:center;
-    padding:12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer;
+    padding:13px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:8px;
     background:#fff;
   }
-  .emp-list-item:hover{border-color:var(--navy);}
+  .emp-list-item .info{cursor:pointer; flex:1;}
+  .emp-list-item:hover{border-color:var(--accent);}
   .emp-list-item .name{font-weight:700; font-size:14px;}
   .emp-list-item .phone{font-size:12px; color:var(--muted);}
+  .emp-list-item .actions{display:flex; gap:6px;}
 
   .search-bar{margin-bottom:14px;}
-  .search-bar input{width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;}
+  .search-bar input{width:100%; padding:11px 14px; border:1px solid var(--border); border-radius:20px; font-size:14px;}
 
-  .file-slot{
-    display:flex; align-items:center; justify-content:space-between; gap:8px;
-    padding:10px; border:1px dashed var(--border); border-radius:8px; margin-bottom:8px;
-    font-size:13px;
+  .dropzone{
+    border:2px dashed var(--border); border-radius:var(--radius-sm); padding:16px;
+    text-align:center; font-size:12px; color:var(--muted); cursor:pointer; margin-top:6px;
+    transition:.15s;
   }
-  .file-slot .label{font-weight:600; flex:1;}
-  .file-status{font-size:12px; color:var(--ok);}
-  .file-status.empty{color:var(--muted);}
-  input[type=file]{font-size:12px;}
+  .dropzone.dragover{border-color:var(--accent); background:#fff6ee; color:var(--accent-dark);}
+  .dropzone input[type=file]{display:none;}
+  .dropzone .dz-title{font-weight:700; color:var(--navy); font-size:13px; margin-bottom:4px;}
+
+  .file-slot{margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--border);}
+  .file-slot:last-child{border-bottom:none;}
+  .file-slot .label-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .file-slot .label{font-weight:700; font-size:13px;}
+  .file-status{font-size:12px; color:var(--ok); font-weight:600;}
+  .file-status.empty{color:var(--muted); font-weight:400;}
 
   .tag{
-    display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; background:#eef1f5; color:var(--muted); margin-left:6px;
+    display:inline-block; font-size:11px; padding:3px 9px; border-radius:20px; background:#f1ede3; color:var(--muted); margin-left:6px;
   }
   .lock-note{
-    font-size:12px; color:var(--muted); background:#f7f8fa; border:1px solid var(--border);
-    border-radius:6px; padding:8px 10px; margin-bottom:12px;
+    font-size:12px; color:var(--muted); background:#fdf8ee; border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:12px;
   }
   .top-actions{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
   .hidden{display:none !important;}
 
   .modal-overlay{
-    position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center;
+    position:fixed; inset:0; background:rgba(20,20,20,.45); display:flex; align-items:center; justify-content:center;
     z-index:50; padding:16px;
   }
-  .modal-box{background:#fff; border-radius:var(--radius); padding:20px; width:100%; max-width:400px;}
-  .modal-box h3{margin-top:0;}
+  .modal-box{background:#fff; border-radius:var(--radius); padding:22px; width:100%; max-width:420px;}
+  .modal-box h3{margin-top:0; color:var(--navy-dark);}
 
   .toast{
-    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-    background:var(--navy-dark); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px;
-    z-index:100; opacity:0; transition:opacity .3s;
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    background:var(--navy-dark); color:#fff; padding:11px 20px; border-radius:24px; font-size:13px;
+    z-index:100; opacity:0; transition:opacity .3s; max-width:90vw;
   }
   .toast.show{opacity:1;}
 
-  .etc-item{border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;}
-  .etc-item input[type=text]{width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; font-size:13px; margin-bottom:6px;}
+  .etc-item{border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; margin-bottom:10px; background:#fffdfa;}
+  .etc-item input[type=text], .etc-item textarea{width:100%; padding:9px; border:1px solid var(--border); border-radius:8px; font-size:13px; margin-bottom:6px;}
+  .etc-item textarea{resize:vertical; min-height:50px;}
 
-  .back-link{font-size:13px; color:var(--navy); cursor:pointer; margin-bottom:10px; display:inline-block;}
+  .back-link{font-size:13px; color:var(--navy); cursor:pointer; margin-bottom:12px; display:inline-block; font-weight:700;}
   small.hint{color:var(--muted); display:block; margin-top:4px; font-size:11px;}
+
+  .resident-row{display:flex; align-items:center; gap:8px;}
+  .resident-row input{max-width:140px;}
+  .resident-sep{color:var(--muted); font-weight:700;}
 </style>
 </head>
 <body>
@@ -164,8 +194,9 @@
     <!-- LIST VIEW -->
     <div id="listView">
       <div class="top-actions">
-        <button class="btn" id="newEmpBtn">+ 신규 직원 등록</button>
+        <button class="btn accent" id="newEmpBtn">+ 신규 직원 등록</button>
       </div>
+      <div class="tabs" id="statusTabs"></div>
       <div class="search-bar">
         <input type="text" id="searchInput" placeholder="이름 또는 전번으로 검색" />
       </div>
@@ -179,10 +210,20 @@
       <div class="card">
         <h3 id="detailName">-</h3>
         <div class="field"><label>전번</label><div id="detailPhone">-</div></div>
+        <div id="detailStatusTag"></div>
       </div>
 
-      <div id="lockNoteBox" class="lock-note hidden">
-        이 정보는 <b>관리자만 조회</b>할 수 있습니다. 아래 입력한 내용은 저장 후 본인도 다시 볼 수 없습니다. (입력 전용)
+      <!-- 주민등록번호 (최상위 보안) -->
+      <div class="card">
+        <h3>주민등록번호</h3>
+        <div class="lock-note">뒷자리는 저장 후 <b>관리자를 포함해 아무도 다시 조회할 수 없습니다.</b> 최초 등록 시 정확히 입력해주세요.</div>
+        <div class="resident-row">
+          <input type="text" id="residentFrontInput" placeholder="앞 6자리" maxlength="6" />
+          <span class="resident-sep">-</span>
+          <input type="password" id="residentBackInput" placeholder="뒤 7자리" maxlength="7" />
+        </div>
+        <div id="residentStatusLine" style="margin-top:8px; font-size:12px;"></div>
+        <button class="btn small" id="saveResidentBtn" style="margin-top:10px;">주민번호 저장</button>
       </div>
 
       <!-- 개인 정보 -->
@@ -194,21 +235,24 @@
 
       <!-- 업로드 파일 항목1 -->
       <div class="card">
-        <h3>서류 업로드 (항목1)</h3>
+        <h3>서류 업로드</h3>
         <div id="cat1List"></div>
       </div>
 
       <!-- 업로드 파일 항목2 -->
       <div class="card">
-        <h3>인사 평가 파일 (항목2)</h3>
-        <div id="cat2List"></div>
-        <input type="file" id="cat2FileInput" style="margin-top:8px;" />
-        <button class="btn small" id="cat2UploadBtn" style="margin-top:8px;">업로드</button>
+        <h3>인사 평가 파일</h3>
+        <div class="dropzone" id="cat2Dropzone">
+          <div class="dz-title">📎 여러 파일을 한번에 끌어다 놓거나 클릭해서 선택</div>
+          <div>(여러 개 선택 가능)</div>
+          <input type="file" id="cat2FileInput" multiple />
+        </div>
+        <div id="cat2List" style="margin-top:12px;"></div>
       </div>
 
       <!-- 업로드 파일 항목3 (기타) -->
       <div class="card">
-        <h3>기타 (항목3)</h3>
+        <h3>기타</h3>
         <div id="cat3List"></div>
         <button class="btn secondary small" id="addEtcBtn">+ 항목 추가</button>
       </div>
@@ -230,7 +274,7 @@
       <input type="text" id="newEmpPhone" placeholder="010-0000-0000" />
     </div>
     <div style="display:flex; gap:8px; margin-top:14px;">
-      <button class="btn" id="createEmpBtn" style="flex:1;">등록</button>
+      <button class="btn accent" id="createEmpBtn" style="flex:1;">등록</button>
       <button class="btn secondary" id="cancelEmpBtn" style="flex:1;">취소</button>
     </div>
   </div>
@@ -240,8 +284,7 @@
 
 <script>
 /* =========================================================
-   ⚠️ 아래 firebaseConfig 를 본인의 Firebase 프로젝트 설정값으로 교체하세요.
-   Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱 > SDK 설정 및 구성 에서 확인 가능
+   Firebase 프로젝트 설정값 (jarada-hr)
    ========================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyCVLgzR9IJaw4lKNaq5ZpHqiQhGKctaofc",
@@ -261,6 +304,7 @@ const storage = firebase.storage();
 
 let currentEmpId = null;
 let isAdminUser = false;
+let currentTab = 'active'; // active | retired | deleted(admin only)
 
 // ---------- Utilities ----------
 function toast(msg){
@@ -272,6 +316,32 @@ function toast(msg){
 function show(el){el.classList.remove('hidden');}
 function hide(el){el.classList.add('hidden');}
 function $(id){return document.getElementById(id);}
+function escapeHtml(str){
+  return String(str==null?'':str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+function makeDropzone(el, onFiles){
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('dragover');
+    if(e.dataTransfer.files && e.dataTransfer.files.length) onFiles(Array.from(e.dataTransfer.files));
+  });
+}
+function makePasteZone(el, onFiles){
+  el.setAttribute('tabindex','0');
+  el.addEventListener('paste', e => {
+    const items = e.clipboardData ? e.clipboardData.items : [];
+    const files = [];
+    for(const item of items){
+      if(item.type && item.type.indexOf('image') === 0){
+        const file = item.getAsFile();
+        if(file) files.push(file);
+      }
+    }
+    if(files.length) onFiles(files);
+  });
+}
 
 // ---------- Auth ----------
 $('googleLoginBtn').onclick = () => {
@@ -301,6 +371,7 @@ auth.onAuthStateChanged(user => {
       : '<span class="badge-staff">직원</span>';
     hide($('loginScreen'));
     show($('appScreen'));
+    renderTabs();
     showListView();
     listenEmployeeList();
   } else {
@@ -325,6 +396,24 @@ function showDetailView(empId){
   loadEmployeeDetail(empId);
 }
 
+// ---------- Tabs ----------
+function renderTabs(){
+  const wrap = $('statusTabs');
+  const tabs = [
+    {key:'active', label:'재직자'},
+    {key:'retired', label:'퇴직자'},
+  ];
+  if(isAdminUser) tabs.push({key:'deleted', label:'삭제됨'});
+  wrap.innerHTML = '';
+  tabs.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (currentTab === t.key ? ' active' : '');
+    btn.textContent = t.label;
+    btn.onclick = () => { currentTab = t.key; renderTabs(); renderEmployeeList(); };
+    wrap.appendChild(btn);
+  });
+}
+
 // ---------- Employee List ----------
 let allEmployees = [];
 
@@ -333,6 +422,8 @@ function listenEmployeeList(){
     allEmployees = [];
     snap.forEach(doc => allEmployees.push({id: doc.id, ...doc.data()}));
     renderEmployeeList();
+  }, err => {
+    console.error(err);
   });
 }
 
@@ -340,22 +431,61 @@ function renderEmployeeList(){
   const q = ($('searchInput').value || '').trim();
   const list = $('empList');
   list.innerHTML = '';
-  const filtered = allEmployees.filter(e =>
-    !q || (e.name && e.name.includes(q)) || (e.phone && e.phone.includes(q))
-  );
+  const filtered = allEmployees.filter(e => {
+    const status = e.status || 'active';
+    if(status !== currentTab) return false;
+    return !q || (e.name && e.name.includes(q)) || (e.phone && e.phone.includes(q));
+  });
   if(filtered.length === 0){
-    list.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:10px;">등록된 직원이 없습니다.</div>';
+    list.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:10px;">해당하는 직원이 없습니다.</div>';
     return;
   }
   filtered.forEach(e => {
     const div = document.createElement('div');
     div.className = 'emp-list-item';
-    div.innerHTML = `<div><div class="name">${escapeHtml(e.name||'')}</div><div class="phone">${escapeHtml(e.phone||'')}</div></div><div class="tag">›</div>`;
-    div.onclick = () => showDetailView(e.id);
+    let actionsHtml = '';
+    if(currentTab === 'active'){
+      actionsHtml = `<button class="btn small secondary" data-act="retire">퇴직</button>`;
+    } else if(currentTab === 'retired'){
+      actionsHtml = `<button class="btn small secondary" data-act="reinstate">복직</button>
+                      <button class="btn small danger" data-act="delete">삭제</button>`;
+    } else if(currentTab === 'deleted'){
+      actionsHtml = `<button class="btn small secondary" data-act="restore">복원</button>`;
+    }
+    div.innerHTML = `
+      <div class="info"><div class="name">${escapeHtml(e.name||'')}</div><div class="phone">${escapeHtml(e.phone||'')}</div></div>
+      <div class="actions">${actionsHtml}</div>
+    `;
+    div.querySelector('.info').onclick = () => showDetailView(e.id);
+    const actBtns = div.querySelectorAll('button[data-act]');
+    actBtns.forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        const act = btn.dataset.act;
+        if(act === 'retire') changeStatus(e.id, e.name, 'retired', '퇴직 처리하시겠습니까?');
+        if(act === 'reinstate') changeStatus(e.id, e.name, 'active', '복직 처리하시겠습니까?');
+        if(act === 'delete') changeStatus(e.id, e.name, 'deleted', `${e.name} 님을 삭제하시겠습니까?\n삭제된 명단은 관리자만 볼 수 있습니다.`);
+        if(act === 'restore') changeStatus(e.id, e.name, 'active', '재직 상태로 복원하시겠습니까?');
+      };
+    });
     list.appendChild(div);
   });
 }
 $('searchInput').oninput = renderEmployeeList;
+
+async function changeStatus(empId, name, newStatus, confirmMsg){
+  if(!confirm(confirmMsg)) return;
+  try{
+    await db.collection('employees').doc(empId).update({
+      status: newStatus,
+      statusUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      statusUpdatedBy: auth.currentUser.email
+    });
+    toast('처리되었습니다.');
+  }catch(err){
+    toast('처리 실패: ' + err.message);
+  }
+}
 
 // ---------- New Employee ----------
 $('newEmpBtn').onclick = () => { $('newEmpName').value=''; $('newEmpPhone').value=''; show($('newEmpModal')); };
@@ -367,7 +497,7 @@ $('createEmpBtn').onclick = async () => {
   if(!name || !phone){ toast('이름과 전번을 입력하세요.'); return; }
   try{
     const docRef = await db.collection('employees').add({
-      name, phone,
+      name, phone, status: 'active',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: auth.currentUser.email
     });
@@ -379,9 +509,8 @@ $('createEmpBtn').onclick = async () => {
   }
 };
 
-// ---------- Personal Info Field Definitions ----------
+// ---------- Personal Info Field Definitions (직원도 열람/수정 가능) ----------
 const PERSONAL_FIELDS = [
-  {key:'residentNumber', label:'주민번호'},
   {key:'address', label:'주소'},
   {key:'bankAccount', label:'계좌번호'},
   {key:'guardianName', label:'보호자 성명'},
@@ -390,69 +519,64 @@ const PERSONAL_FIELDS = [
   {key:'eduStartDate', label:'교육시작일', type:'date'},
   {key:'workStartDate', label:'근로시작일', type:'date'},
   {key:'insuranceRegDate', label:'4대보험 등록일', type:'date'},
-  {key:'insurancePeriodStart', label:'고용보험 기간 (시작)', type:'date'},
-  {key:'insurancePeriodEnd', label:'고용보험 기간 (종료)', type:'date'},
+  {key:'resignDate', label:'퇴사일', type:'date'},
 ];
 
 const CATEGORY1_ITEMS = [
-  {key:'resume', label:'이력서'},
+  {key:'resume', label:'이력서', pasteable:true},
+  {key:'portfolio', label:'포트폴리오', pasteable:true},
   {key:'criminalRecord', label:'범죄기록조회서'},
   {key:'diploma', label:'졸업증명서'},
   {key:'residentCopy', label:'주민등록등본'},
   {key:'bankbookCopy', label:'통장사본'},
-  {key:'businessRegistration', label:'사업자등록증 (해당 시)'},
+  {key:'businessRegistration', label:'사업자등록확인서'},
   {key:'employmentInsuranceDoc', label:'고용보험 관련서류'},
 ];
 
 // ---------- Load Employee Detail ----------
-let privateUnsub = null;
+let filesUnsub = null;
 
 async function loadEmployeeDetail(empId){
-  // basic public info
   const empDoc = await db.collection('employees').doc(empId).get();
   const emp = empDoc.data() || {};
   $('detailName').textContent = emp.name || '(이름 없음)';
   $('detailPhone').textContent = emp.phone || '-';
+  const status = emp.status || 'active';
+  const statusLabelMap = {active:'재직중', retired:'퇴직', deleted:'삭제됨'};
+  $('detailStatusTag').innerHTML = `<span class="tag">${statusLabelMap[status]||status}</span>`;
 
-  // personal info fields (render inputs)
-  renderPersonalInfoFields(null); // blank by default
+  renderPersonalInfoFields(emp.personalInfo || {});
+  renderResidentStatus(emp.personalInfo || {});
 
-  // file lists (blank/locked by default)
+  if(filesUnsub) { filesUnsub(); filesUnsub = null; }
+
   renderCat1(null);
   renderCat2(null);
   renderCat3(null);
 
-  if(privateUnsub) { privateUnsub(); privateUnsub = null; }
-
   if(isAdminUser){
-    hide($('lockNoteBox'));
-    // Admin: real-time listen to private info, show full data + downloadable files
-    privateUnsub = db.collection('employees').doc(empId).collection('private').doc('info')
+    filesUnsub = db.collection('employees').doc(empId).collection('private').doc('files')
       .onSnapshot(snap => {
         const data = snap.exists ? snap.data() : {};
-        renderPersonalInfoFields(data);
-        renderCat1(data.files && data.files.category1);
-        renderCat2(data.files && data.files.category2);
-        renderCat3(data.files && data.files.category3);
+        renderCat1(data.category1);
+        renderCat2(data.category2);
+        renderCat3(data.category3);
       }, err => {
-        toast('비공개 정보 로드 실패: ' + err.message);
+        toast('파일 정보 로드 실패: ' + err.message);
       });
-  } else {
-    show($('lockNoteBox'));
-    // Staff: blank entry-only form, no read
   }
 }
 
-function renderPersonalInfoFields(data){
+function renderPersonalInfoFields(personalInfo){
   const wrap = $('personalInfoFields');
   wrap.innerHTML = '';
   PERSONAL_FIELDS.forEach(f => {
-    const val = data && data[f.key] ? data[f.key] : '';
+    const val = personalInfo[f.key] || '';
     const div = document.createElement('div');
     div.className = 'field';
     div.innerHTML = `
       <label>${f.label}</label>
-      <input type="${f.type || 'text'}" data-key="${f.key}" value="${escapeAttr(val)}" placeholder="${isAdminUser ? '' : '입력 전용 (조회 불가)'}" />
+      <input type="${f.type || 'text'}" data-key="${f.key}" value="${escapeHtml(val)}" />
     `;
     wrap.appendChild(div);
   });
@@ -463,58 +587,105 @@ $('savePersonalBtn').onclick = async () => {
   const inputs = document.querySelectorAll('#personalInfoFields input');
   const updates = {};
   inputs.forEach(inp => {
-    const key = inp.dataset.key;
-    const val = inp.value.trim();
-    if(val !== ''){ updates[key] = val; }
+    updates['personalInfo.' + inp.dataset.key] = inp.value.trim();
   });
-  if(Object.keys(updates).length === 0){ toast('입력된 항목이 없습니다.'); return; }
-  updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-  updates.updatedBy = auth.currentUser.email;
   try{
-    await db.collection('employees').doc(currentEmpId).collection('private').doc('info')
-      .set(updates, {merge:true});
+    await db.collection('employees').doc(currentEmpId).update(updates);
     toast('저장되었습니다.');
-    if(!isAdminUser){
-      // clear inputs after blind-save so nothing lingers on screen
-      renderPersonalInfoFields(null);
-    }
   }catch(err){
     toast('저장 실패: ' + err.message);
   }
 };
 
-// ---------- Category 1: fixed file slots ----------
+// ---------- 주민등록번호 (강화 보안: 뒷자리는 저장 후 전원 조회 불가) ----------
+function renderResidentStatus(personalInfo){
+  $('residentFrontInput').value = '';
+  $('residentBackInput').value = '';
+  const frontFilled = !!personalInfo.residentFrontFilled;
+  const backFilled = !!personalInfo.residentBackFilled;
+  let line = '';
+  if(isAdminUser && frontFilled){
+    line += '앞자리: 입력됨 (관리자 조회 가능) ';
+  } else if(frontFilled){
+    line += '앞자리: 입력됨 (조회 불가) ';
+  }
+  if(backFilled){
+    line += '/ 뒷자리: 입력됨 (조회 불가, 재입력 시 덮어쓰기)';
+  }
+  $('residentStatusLine').textContent = line || '아직 등록되지 않았습니다.';
+
+  if(isAdminUser && frontFilled){
+    db.collection('employees').doc(currentEmpId).collection('private').doc('residentFront').get()
+      .then(doc => {
+        if(doc.exists) $('residentFrontInput').value = doc.data().value || '';
+      }).catch(()=>{});
+  }
+}
+
+$('saveResidentBtn').onclick = async () => {
+  if(!currentEmpId) return;
+  const front = $('residentFrontInput').value.trim();
+  const back = $('residentBackInput').value.trim();
+  if(!front && !back){ toast('입력된 값이 없습니다.'); return; }
+  try{
+    const batchOps = [];
+    if(front){
+      await db.collection('employees').doc(currentEmpId).collection('private').doc('residentFront')
+        .set({value: front, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: auth.currentUser.email}, {merge:true});
+      await db.collection('employees').doc(currentEmpId).update({'personalInfo.residentFrontFilled': true});
+    }
+    if(back){
+      await db.collection('employees').doc(currentEmpId).collection('private').doc('residentBack')
+        .set({value: back, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: auth.currentUser.email}, {merge:true});
+      await db.collection('employees').doc(currentEmpId).update({'personalInfo.residentBackFilled': true});
+    }
+    toast('저장되었습니다.');
+    $('residentBackInput').value = '';
+    if(!isAdminUser) $('residentFrontInput').value = '';
+  }catch(err){
+    toast('저장 실패: ' + err.message);
+  }
+};
+
+// ---------- Category 1: 고정 항목 (드래그&드롭 + 붙여넣기 지원) ----------
 function renderCat1(filesData){
   const wrap = $('cat1List');
   wrap.innerHTML = '';
   CATEGORY1_ITEMS.forEach(item => {
     const fileInfo = filesData ? filesData[item.key] : null;
-    const row = document.createElement('div');
-    row.className = 'file-slot';
+    const slot = document.createElement('div');
+    slot.className = 'file-slot';
+
     const statusHtml = isAdminUser
       ? (fileInfo
-          ? `<span class="file-status">✔ ${escapeHtml(fileInfo.name||'업로드됨')}</span> <button class="btn small secondary" data-dl="${item.key}">다운로드</button>`
+          ? `<span class="file-status">✔ ${escapeHtml(fileInfo.name||'업로드됨')}</span> <button class="btn small secondary" data-dl>다운로드</button>`
           : `<span class="file-status empty">미업로드</span>`)
-      : `<span class="file-status empty">조회 불가</span>`;
-    row.innerHTML = `
-      <div class="label">${item.label}</div>
-      <div>${statusHtml}</div>
+      : `<span class="file-status empty">조회 불가 (업로드만 가능)</span>`;
+
+    const pasteHint = item.pasteable ? '<small class="hint">이 영역 클릭 후 Ctrl+V로 이미지 붙여넣기 가능</small>' : '';
+
+    slot.innerHTML = `
+      <div class="label-row">
+        <div class="label">${item.label}</div>
+        <div>${statusHtml}</div>
+      </div>
+      <div class="dropzone" data-zone="${item.key}">
+        <div class="dz-title">📎 파일을 끌어다 놓거나 클릭해서 선택</div>
+        ${pasteHint}
+        <input type="file" data-upload="${item.key}" />
+      </div>
     `;
-    wrap.appendChild(row);
+    wrap.appendChild(slot);
 
-    // upload control (everyone can upload)
-    const uploadRow = document.createElement('div');
-    uploadRow.style.marginBottom = '12px';
-    uploadRow.innerHTML = `<input type="file" data-upload="${item.key}" style="max-width:100%;" />`;
-    wrap.appendChild(uploadRow);
-
-    uploadRow.querySelector('input[type=file]').onchange = (e) => {
-      const file = e.target.files[0];
-      if(file) uploadCategory1File(item.key, item.label, file);
-    };
+    const zone = slot.querySelector(`[data-zone="${item.key}"]`);
+    const input = slot.querySelector(`input[data-upload="${item.key}"]`);
+    zone.onclick = (e) => { if(e.target !== input) input.click(); };
+    input.onchange = (e) => { if(e.target.files[0]) uploadCategory1File(item.key, item.label, e.target.files[0]); };
+    makeDropzone(zone, files => { if(files[0]) uploadCategory1File(item.key, item.label, files[0]); });
+    if(item.pasteable) makePasteZone(zone, files => { if(files[0]) uploadCategory1File(item.key, item.label, files[0]); });
 
     if(isAdminUser && fileInfo){
-      const dlBtn = row.querySelector(`button[data-dl]`);
+      const dlBtn = slot.querySelector('button[data-dl]');
       if(dlBtn) dlBtn.onclick = () => downloadFile(fileInfo.path, fileInfo.name);
     }
   });
@@ -527,13 +698,13 @@ async function uploadCategory1File(key, label, file){
     const path = `hr/${currentEmpId}/category1/${key}_${Date.now()}_${file.name}`;
     const ref = storage.ref(path);
     await ref.put(file);
-    await db.collection('employees').doc(currentEmpId).collection('private').doc('info')
+    await db.collection('employees').doc(currentEmpId).collection('private').doc('files')
       .set({
-        files: { category1: { [key]: {
+        category1: { [key]: {
           name: file.name, path,
           uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
           uploadedBy: auth.currentUser.email
-        } } }
+        } }
       }, {merge:true});
     toast(`${label} 업로드 완료`);
   }catch(err){
@@ -541,7 +712,7 @@ async function uploadCategory1File(key, label, file){
   }
 }
 
-// ---------- Category 2: 인사평가 (multiple) ----------
+// ---------- Category 2: 인사평가 (큰 박스, 다중 업로드) ----------
 function renderCat2(filesArr){
   const wrap = $('cat2List');
   wrap.innerHTML = '';
@@ -549,11 +720,12 @@ function renderCat2(filesArr){
     if(!filesArr || filesArr.length === 0){
       wrap.innerHTML = '<div style="color:var(--muted); font-size:13px;">업로드된 파일이 없습니다.</div>';
     } else {
-      filesArr.forEach((f, idx) => {
+      filesArr.forEach(f => {
         const row = document.createElement('div');
         row.className = 'file-slot';
-        row.innerHTML = `<div class="label">${escapeHtml(f.name)}</div>
-          <button class="btn small secondary">다운로드</button>`;
+        row.style.paddingBottom = '8px';
+        row.innerHTML = `<div class="label-row"><div class="label">${escapeHtml(f.name)}</div>
+          <button class="btn small secondary">다운로드</button></div>`;
         row.querySelector('button').onclick = () => downloadFile(f.path, f.name);
         wrap.appendChild(row);
       });
@@ -563,32 +735,38 @@ function renderCat2(filesArr){
   }
 }
 
-$('cat2UploadBtn').onclick = async () => {
-  if(!currentEmpId) return;
-  const fileInput = $('cat2FileInput');
-  const file = fileInput.files[0];
-  if(!file){ toast('파일을 선택하세요.'); return; }
-  toast('업로드 중...');
+async function uploadCategory2Files(fileList){
+  if(!currentEmpId || !fileList.length) return;
+  toast(`${fileList.length}개 파일 업로드 중...`);
   try{
-    const path = `hr/${currentEmpId}/category2/${Date.now()}_${file.name}`;
-    const ref = storage.ref(path);
-    await ref.put(file);
-    await db.collection('employees').doc(currentEmpId).collection('private').doc('info')
-      .set({
-        files: { category2: firebase.firestore.FieldValue.arrayUnion({
-          name: file.name, path,
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: auth.currentUser.email
-        }) }
-      }, {merge:true});
+    for(const file of fileList){
+      const path = `hr/${currentEmpId}/category2/${Date.now()}_${file.name}`;
+      const ref = storage.ref(path);
+      await ref.put(file);
+      await db.collection('employees').doc(currentEmpId).collection('private').doc('files')
+        .set({
+          category2: firebase.firestore.FieldValue.arrayUnion({
+            name: file.name, path,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: auth.currentUser.email
+          })
+        }, {merge:true});
+    }
     toast('업로드 완료');
-    fileInput.value = '';
   }catch(err){
     toast('업로드 실패: ' + err.message);
   }
-};
+}
 
-// ---------- Category 3: 기타 (dynamic) ----------
+(function initCat2Dropzone(){
+  const zone = $('cat2Dropzone');
+  const input = $('cat2FileInput');
+  zone.onclick = (e) => { if(e.target !== input) input.click(); };
+  input.onchange = (e) => { if(e.target.files.length) { uploadCategory2Files(Array.from(e.target.files)); input.value=''; } };
+  makeDropzone(zone, files => uploadCategory2Files(files));
+})();
+
+// ---------- Category 3: 기타 (항목명 + 설명 + 파일, 드래그&드롭) ----------
 let etcDraftCount = 0;
 
 function renderCat3(filesArr){
@@ -601,8 +779,13 @@ function renderCat3(filesArr){
       filesArr.forEach(f => {
         const row = document.createElement('div');
         row.className = 'file-slot';
-        row.innerHTML = `<div class="label">${escapeHtml(f.label)} — ${escapeHtml(f.name)}</div>
-          <button class="btn small secondary">다운로드</button>`;
+        row.style.paddingBottom = '8px';
+        row.innerHTML = `<div class="label-row">
+            <div><div class="label">${escapeHtml(f.label)}</div>
+            ${f.description ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(f.description)}</div>` : ''}
+            </div>
+            <button class="btn small secondary">다운로드</button>
+          </div>`;
         row.querySelector('button').onclick = () => downloadFile(f.path, f.name);
         wrap.appendChild(row);
       });
@@ -620,26 +803,35 @@ $('addEtcBtn').onclick = () => {
   div.className = 'etc-item';
   div.innerHTML = `
     <input type="text" placeholder="항목명 (예: 자격증 사본)" id="${id}_label" />
-    <input type="file" id="${id}_file" />
-    <button class="btn small" id="${id}_btn">업로드</button>
+    <textarea placeholder="파일 설명 (선택)" id="${id}_desc"></textarea>
+    <div class="dropzone" id="${id}_zone">
+      <div class="dz-title">📎 파일을 끌어다 놓거나 클릭해서 선택</div>
+      <input type="file" id="${id}_file" />
+    </div>
+    <button class="btn small" id="${id}_btn" style="margin-top:8px;">업로드</button>
   `;
   wrap.appendChild(div);
-  $(id+'_btn').onclick = async () => {
+
+  const zone = $(id+'_zone');
+  const fileInput = $(id+'_file');
+  zone.onclick = (e) => { if(e.target !== fileInput) fileInput.click(); };
+
+  const doUpload = async (file) => {
     const label = $(id+'_label').value.trim();
-    const file = $(id+'_file').files[0];
+    const description = $(id+'_desc').value.trim();
     if(!label || !file){ toast('항목명과 파일을 모두 입력하세요.'); return; }
     toast('업로드 중...');
     try{
       const path = `hr/${currentEmpId}/category3/${Date.now()}_${file.name}`;
       const ref = storage.ref(path);
       await ref.put(file);
-      await db.collection('employees').doc(currentEmpId).collection('private').doc('info')
+      await db.collection('employees').doc(currentEmpId).collection('private').doc('files')
         .set({
-          files: { category3: firebase.firestore.FieldValue.arrayUnion({
-            label, name: file.name, path,
+          category3: firebase.firestore.FieldValue.arrayUnion({
+            label, description, name: file.name, path,
             uploadedAt: new Date().toISOString(),
             uploadedBy: auth.currentUser.email
-          }) }
+          })
         }, {merge:true});
       toast('업로드 완료');
       div.remove();
@@ -647,9 +839,13 @@ $('addEtcBtn').onclick = () => {
       toast('업로드 실패: ' + err.message);
     }
   };
+
+  fileInput.onchange = (e) => { if(e.target.files[0]) doUpload(e.target.files[0]); };
+  makeDropzone(zone, files => { if(files[0]) doUpload(files[0]); });
+  $(id+'_btn').onclick = () => { if(fileInput.files[0]) doUpload(fileInput.files[0]); else toast('파일을 선택하세요.'); };
 };
 
-// ---------- Download (admin only, enforced by Storage rules too) ----------
+// ---------- Download (관리자 전용, Storage 규칙으로도 강제) ----------
 async function downloadFile(path, name){
   try{
     const url = await storage.ref(path).getDownloadURL();
@@ -664,12 +860,6 @@ async function downloadFile(path, name){
     toast('다운로드 실패: ' + err.message);
   }
 }
-
-// ---------- Helpers ----------
-function escapeHtml(str){
-  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-}
-function escapeAttr(str){ return escapeHtml(str); }
 </script>
 </body>
 </html>
