@@ -216,11 +216,11 @@
       <!-- 주민등록번호 (최상위 보안) -->
       <div class="card">
         <h3>주민등록번호</h3>
-        <div class="lock-note">뒷자리는 저장 후 <b>관리자를 포함해 아무도 다시 조회할 수 없습니다.</b> 최초 등록 시 정확히 입력해주세요.</div>
         <div class="resident-row">
           <input type="text" id="residentFrontInput" placeholder="앞 6자리" maxlength="6" />
           <span class="resident-sep">-</span>
           <input type="password" id="residentBackInput" placeholder="뒤 7자리" maxlength="7" />
+          <button type="button" class="btn small secondary" id="toggleBackVisibility">보기</button>
         </div>
         <div id="residentStatusLine" style="margin-top:8px; font-size:12px;"></div>
         <button class="btn small" id="saveResidentBtn" style="margin-top:10px;">주민번호 저장</button>
@@ -231,6 +231,52 @@
         <h3>개인 정보</h3>
         <div class="row" id="personalInfoFields"></div>
         <button class="btn" id="savePersonalBtn">개인정보 저장</button>
+      </div>
+
+      <!-- 급여 정보 (관리자 전용) -->
+      <div class="card hidden" id="compensationCard">
+        <h3>급여 정보 (관리자 전용)</h3>
+        <div class="row">
+          <div class="field">
+            <label>기본급</label>
+            <input type="number" id="compBaseSalary" placeholder="0" /> <small class="hint">원</small>
+          </div>
+          <div class="field">
+            <label>식대</label>
+            <input type="number" id="compMealAllowance" placeholder="0" /> <small class="hint">원</small>
+          </div>
+          <div class="field">
+            <label>추가급여</label>
+            <input type="number" id="compAdditionalSalary" placeholder="0" /> <small class="hint">원</small>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>인센티브 - 초과 기준</label>
+            <input type="text" id="compIncentiveThreshold" placeholder="예: 5명 초과" />
+          </div>
+          <div class="field">
+            <label>인센티브 - 금액</label>
+            <input type="number" id="compIncentiveAmount" placeholder="0" /> <small class="hint">원</small>
+          </div>
+        </div>
+        <div class="field">
+          <label>기타 급여</label>
+          <input type="text" id="compOtherSalary" placeholder="기타 급여 내역" />
+        </div>
+
+        <div class="field" style="margin-top:6px;">
+          <label>퇴직금 중간 정산</label>
+          <div id="severanceList"></div>
+          <button class="btn secondary small" id="addSeveranceBtn" style="margin-top:6px;">+ 추가</button>
+        </div>
+
+        <div class="field" style="margin-top:6px;">
+          <label>메모</label>
+          <textarea id="compMemo" rows="6" placeholder="메모"></textarea>
+        </div>
+
+        <button class="btn accent" id="saveCompensationBtn" style="margin-top:8px;">급여 정보 저장</button>
       </div>
 
       <!-- 업로드 파일 항목1 -->
@@ -535,35 +581,58 @@ const CATEGORY1_ITEMS = [
 
 // ---------- Load Employee Detail ----------
 let filesUnsub = null;
+let empUnsub = null;
+let compUnsub = null;
+let empDataCache = {};
+let filesDataCache = {};
+let severanceEntries = [];
+const STATUS_LABEL_MAP = {active:'재직중', retired:'퇴직', deleted:'삭제됨'};
 
-async function loadEmployeeDetail(empId){
-  const empDoc = await db.collection('employees').doc(empId).get();
-  const emp = empDoc.data() || {};
-  $('detailName').textContent = emp.name || '(이름 없음)';
-  $('detailPhone').textContent = emp.phone || '-';
-  const status = emp.status || 'active';
-  const statusLabelMap = {active:'재직중', retired:'퇴직', deleted:'삭제됨'};
-  $('detailStatusTag').innerHTML = `<span class="tag">${statusLabelMap[status]||status}</span>`;
+function renderFileSections(){
+  const uploadStatus = empDataCache.uploadStatus || {};
+  renderCat1(filesDataCache.category1, uploadStatus);
+  renderCat2(filesDataCache.category2, uploadStatus);
+  renderCat3(filesDataCache.category3, uploadStatus);
+}
 
-  renderPersonalInfoFields(emp.personalInfo || {});
-  renderResidentStatus(emp.personalInfo || {});
-
+function loadEmployeeDetail(empId){
+  if(empUnsub) { empUnsub(); empUnsub = null; }
   if(filesUnsub) { filesUnsub(); filesUnsub = null; }
+  empDataCache = {}; filesDataCache = {};
 
-  renderCat1(null);
-  renderCat2(null);
-  renderCat3(null);
+  empUnsub = db.collection('employees').doc(empId).onSnapshot(doc => {
+    const emp = doc.data() || {};
+    empDataCache = emp;
+    $('detailName').textContent = emp.name || '(이름 없음)';
+    $('detailPhone').textContent = emp.phone || '-';
+    const status = emp.status || 'active';
+    $('detailStatusTag').innerHTML = `<span class="tag">${STATUS_LABEL_MAP[status]||status}</span>`;
+    renderPersonalInfoFields(emp.personalInfo || {});
+    renderResidentStatus(emp.personalInfo || {});
+    renderFileSections();
+  }, err => {
+    toast('직원 정보 로드 실패: ' + err.message);
+  });
 
   if(isAdminUser){
     filesUnsub = db.collection('employees').doc(empId).collection('private').doc('files')
       .onSnapshot(snap => {
-        const data = snap.exists ? snap.data() : {};
-        renderCat1(data.category1);
-        renderCat2(data.category2);
-        renderCat3(data.category3);
+        filesDataCache = snap.exists ? snap.data() : {};
+        renderFileSections();
       }, err => {
         toast('파일 정보 로드 실패: ' + err.message);
       });
+
+    show($('compensationCard'));
+    if(compUnsub) { compUnsub(); compUnsub = null; }
+    compUnsub = db.collection('employees').doc(empId).collection('private').doc('compensation')
+      .onSnapshot(snap => {
+        renderCompensation(snap.exists ? snap.data() : {});
+      }, err => {
+        toast('급여 정보 로드 실패: ' + err.message);
+      });
+  } else {
+    hide($('compensationCard'));
   }
 }
 
@@ -597,30 +666,39 @@ $('savePersonalBtn').onclick = async () => {
   }
 };
 
-// ---------- 주민등록번호 (강화 보안: 뒷자리는 저장 후 전원 조회 불가) ----------
+// ---------- 주민등록번호 (앞/뒤 분리 저장, 관리자는 둘 다 조회 가능) ----------
 function renderResidentStatus(personalInfo){
   $('residentFrontInput').value = '';
   $('residentBackInput').value = '';
   const frontFilled = !!personalInfo.residentFrontFilled;
   const backFilled = !!personalInfo.residentBackFilled;
-  let line = '';
-  if(isAdminUser && frontFilled){
-    line += '앞자리: 입력됨 (관리자 조회 가능) ';
-  } else if(frontFilled){
-    line += '앞자리: 입력됨 (조회 불가) ';
-  }
-  if(backFilled){
-    line += '/ 뒷자리: 입력됨 (조회 불가, 재입력 시 덮어쓰기)';
-  }
-  $('residentStatusLine').textContent = line || '아직 등록되지 않았습니다.';
 
-  if(isAdminUser && frontFilled){
-    db.collection('employees').doc(currentEmpId).collection('private').doc('residentFront').get()
-      .then(doc => {
-        if(doc.exists) $('residentFrontInput').value = doc.data().value || '';
-      }).catch(()=>{});
+  const frontLabel = frontFilled
+    ? (isAdminUser ? '앞자리: 등록됨' : '앞자리: 이미 등록됨 (조회 불가)')
+    : '앞자리: 미등록';
+  const backLabel = backFilled
+    ? (isAdminUser ? '뒷자리: 등록됨' : '뒷자리: 이미 등록됨 (조회 불가)')
+    : '뒷자리: 미등록';
+  $('residentStatusLine').textContent = `${frontLabel} · ${backLabel}`;
+
+  if(isAdminUser){
+    if(frontFilled){
+      db.collection('employees').doc(currentEmpId).collection('private').doc('residentFront').get()
+        .then(doc => { if(doc.exists) $('residentFrontInput').value = doc.data().value || ''; })
+        .catch(()=>{});
+    }
+    if(backFilled){
+      db.collection('employees').doc(currentEmpId).collection('private').doc('residentBack').get()
+        .then(doc => { if(doc.exists) $('residentBackInput').value = doc.data().value || ''; })
+        .catch(()=>{});
+    }
   }
 }
+
+$('toggleBackVisibility').onclick = () => {
+  const inp = $('residentBackInput');
+  inp.type = (inp.type === 'password') ? 'text' : 'password';
+};
 
 $('saveResidentBtn').onclick = async () => {
   if(!currentEmpId) return;
@@ -648,9 +726,10 @@ $('saveResidentBtn').onclick = async () => {
 };
 
 // ---------- Category 1: 고정 항목 (드래그&드롭 + 붙여넣기 지원) ----------
-function renderCat1(filesData){
+function renderCat1(filesData, uploadStatus){
   const wrap = $('cat1List');
   wrap.innerHTML = '';
+  uploadStatus = uploadStatus || {};
   CATEGORY1_ITEMS.forEach(item => {
     const fileInfo = filesData ? filesData[item.key] : null;
     const slot = document.createElement('div');
@@ -660,7 +739,9 @@ function renderCat1(filesData){
       ? (fileInfo
           ? `<span class="file-status">✔ ${escapeHtml(fileInfo.name||'업로드됨')}</span> <button class="btn small secondary" data-dl>다운로드</button>`
           : `<span class="file-status empty">미업로드</span>`)
-      : `<span class="file-status empty">조회 불가 (업로드만 가능)</span>`;
+      : (uploadStatus[item.key]
+          ? `<span class="file-status">✔ 이미 등록됨 (열람은 관리자만 가능)</span>`
+          : `<span class="file-status empty">미등록</span>`);
 
     const pasteHint = item.pasteable ? '<small class="hint">이 영역 클릭 후 Ctrl+V로 이미지 붙여넣기 가능</small>' : '';
 
@@ -706,6 +787,7 @@ async function uploadCategory1File(key, label, file){
           uploadedBy: auth.currentUser.email
         } }
       }, {merge:true});
+    await db.collection('employees').doc(currentEmpId).update({['uploadStatus.' + key]: true});
     toast(`${label} 업로드 완료`);
   }catch(err){
     toast('업로드 실패: ' + err.message);
@@ -713,9 +795,10 @@ async function uploadCategory1File(key, label, file){
 }
 
 // ---------- Category 2: 인사평가 (큰 박스, 다중 업로드) ----------
-function renderCat2(filesArr){
+function renderCat2(filesArr, uploadStatus){
   const wrap = $('cat2List');
   wrap.innerHTML = '';
+  uploadStatus = uploadStatus || {};
   if(isAdminUser){
     if(!filesArr || filesArr.length === 0){
       wrap.innerHTML = '<div style="color:var(--muted); font-size:13px;">업로드된 파일이 없습니다.</div>';
@@ -769,9 +852,10 @@ async function uploadCategory2Files(fileList){
 // ---------- Category 3: 기타 (항목명 + 설명 + 파일, 드래그&드롭) ----------
 let etcDraftCount = 0;
 
-function renderCat3(filesArr){
+function renderCat3(filesArr, uploadStatus){
   const wrap = $('cat3List');
   wrap.innerHTML = '';
+  uploadStatus = uploadStatus || {};
   if(isAdminUser){
     if(!filesArr || filesArr.length === 0){
       wrap.innerHTML = '<div style="color:var(--muted); font-size:13px;">등록된 항목이 없습니다.</div>';
@@ -860,6 +944,78 @@ async function downloadFile(path, name){
     toast('다운로드 실패: ' + err.message);
   }
 }
+
+// ---------- 급여 정보 (관리자 전용 - 직원은 필드 자체를 볼 수 없음) ----------
+function renderCompensation(data){
+  data = data || {};
+  $('compBaseSalary').value = data.baseSalary || '';
+  $('compMealAllowance').value = data.mealAllowance || '';
+  $('compAdditionalSalary').value = data.additionalSalary || '';
+  $('compIncentiveThreshold').value = data.incentiveThreshold || '';
+  $('compIncentiveAmount').value = data.incentiveAmount || '';
+  $('compOtherSalary').value = data.otherSalary || '';
+  $('compMemo').value = data.memo || '';
+  severanceEntries = Array.isArray(data.severanceSettlements) ? data.severanceSettlements.map(e => ({...e})) : [];
+  renderSeveranceList();
+}
+
+function renderSeveranceList(){
+  const wrap = $('severanceList');
+  wrap.innerHTML = '';
+  severanceEntries.forEach((entry, idx) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.alignItems = 'center';
+    row.innerHTML = `
+      <input type="number" placeholder="년" style="max-width:80px;" data-sev="${idx}-year" value="${escapeHtml(entry.year||'')}" />
+      <input type="number" placeholder="월" style="max-width:60px;" data-sev="${idx}-month" value="${escapeHtml(entry.month||'')}" />
+      <input type="number" placeholder="일" style="max-width:60px;" data-sev="${idx}-day" value="${escapeHtml(entry.day||'')}" />
+      <input type="number" placeholder="금액(원)" style="max-width:140px;" data-sev="${idx}-amount" value="${escapeHtml(entry.amount||'')}" />
+      <button class="btn small danger" data-sev-remove="${idx}">삭제</button>
+    `;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('input[data-sev]').forEach(inp => {
+    inp.oninput = () => {
+      const [idx, field] = inp.dataset.sev.split('-');
+      severanceEntries[idx][field] = inp.value;
+    };
+  });
+  wrap.querySelectorAll('button[data-sev-remove]').forEach(btn => {
+    btn.onclick = () => {
+      severanceEntries.splice(Number(btn.dataset.sevRemove), 1);
+      renderSeveranceList();
+    };
+  });
+}
+
+$('addSeveranceBtn').onclick = () => {
+  severanceEntries.push({year:'', month:'', day:'', amount:''});
+  renderSeveranceList();
+};
+
+$('saveCompensationBtn').onclick = async () => {
+  if(!currentEmpId) return;
+  const payload = {
+    baseSalary: $('compBaseSalary').value.trim(),
+    mealAllowance: $('compMealAllowance').value.trim(),
+    additionalSalary: $('compAdditionalSalary').value.trim(),
+    incentiveThreshold: $('compIncentiveThreshold').value.trim(),
+    incentiveAmount: $('compIncentiveAmount').value.trim(),
+    otherSalary: $('compOtherSalary').value.trim(),
+    memo: $('compMemo').value.trim(),
+    severanceSettlements: severanceEntries,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: auth.currentUser.email
+  };
+  try{
+    await db.collection('employees').doc(currentEmpId).collection('private').doc('compensation')
+      .set(payload, {merge:true});
+    toast('급여 정보가 저장되었습니다.');
+  }catch(err){
+    toast('저장 실패: ' + err.message);
+  }
+};
 </script>
 </body>
 </html>
