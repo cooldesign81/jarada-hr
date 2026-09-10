@@ -368,17 +368,9 @@ const storage = firebase.storage();
 
 let currentEmpId = null;
 let isAdminUser = false;
+let isAnonymousUser = false;
 let currentTab = 'active'; // active | retired | deleted(admin only)
 const selfServiceEmpId = new URLSearchParams(location.search).get('self');
-
-if(selfServiceEmpId){
-  document.body.classList.add('self-mode');
-  hide($('loginScreen'));
-  auth.signInAnonymously().catch(err => {
-    show($('loginScreen'));
-    $('loginError').textContent = "접속 실패: " + err.message;
-  });
-}
 
 // ---------- Utilities ----------
 function toast(msg){
@@ -438,8 +430,17 @@ $('logoutBtn').onclick = () => auth.signOut();
 
 auth.onAuthStateChanged(user => {
   if(user){
-    if(selfServiceEmpId){
+    isAnonymousUser = !!user.isAnonymous;
+
+    if(isAnonymousUser){
+      // 익명 세션은 반드시 본인 등록 링크(?self=)를 통해서만 유효함.
+      // 링크 없이 남아있는 익명 세션이면 즉시 로그아웃시켜 목록/다른 정보 접근을 원천 차단.
+      if(!selfServiceEmpId){
+        auth.signOut();
+        return;
+      }
       isAdminUser = false;
+      document.body.classList.add('self-mode');
       hide($('loginScreen'));
       show($('appScreen'));
       document.querySelector('header .title').textContent = '자라다 인사정보 등록';
@@ -447,6 +448,7 @@ auth.onAuthStateChanged(user => {
       showDetailView(selfServiceEmpId);
       return;
     }
+
     isAdminUser = (user.email === ADMIN_EMAIL);
     $('userEmail').textContent = user.email || '';
     $('roleBadge').innerHTML = isAdminUser
@@ -458,6 +460,13 @@ auth.onAuthStateChanged(user => {
     showListView();
     listenEmployeeList();
   } else {
+    if(selfServiceEmpId){
+      auth.signInAnonymously().catch(err => {
+        show($('loginScreen'));
+        $('loginError').textContent = "접속 실패: " + err.message;
+      });
+      return;
+    }
     show($('loginScreen'));
     hide($('appScreen'));
   }
@@ -535,7 +544,8 @@ function renderEmployeeList(){
       actionsHtml = `<button class="btn small secondary" data-act="reinstate">복직</button>
                       <button class="btn small danger" data-act="delete">삭제</button>`;
     } else if(currentTab === 'deleted'){
-      actionsHtml = `<button class="btn small secondary" data-act="restore">복원</button>`;
+      actionsHtml = `<button class="btn small secondary" data-act="restore">복원</button>
+                      <button class="btn small danger" data-act="purge">완전 삭제</button>`;
     }
     div.innerHTML = `
       <div class="info"><div class="name">${escapeHtml(e.name||'')}</div><div class="phone">${escapeHtml(e.phone||'')}</div></div>
@@ -551,12 +561,44 @@ function renderEmployeeList(){
         if(act === 'reinstate') changeStatus(e.id, e.name, 'active', '복직 처리하시겠습니까?');
         if(act === 'delete') changeStatus(e.id, e.name, 'deleted', `${e.name} 님을 삭제하시겠습니까?\n삭제된 명단은 관리자만 볼 수 있습니다.`);
         if(act === 'restore') changeStatus(e.id, e.name, 'active', '재직 상태로 복원하시겠습니까?');
+        if(act === 'purge') purgeEmployee(e.id, e.name);
       };
     });
     list.appendChild(div);
   });
 }
 $('searchInput').oninput = renderEmployeeList;
+
+async function deleteStorageFolder(ref){
+  try{
+    const res = await ref.listAll();
+    for(const item of res.items){ await item.delete().catch(()=>{}); }
+    for(const prefix of res.prefixes){ await deleteStorageFolder(prefix); }
+  }catch(err){
+    // 파일이 없거나 폴더가 비어있으면 조용히 통과
+  }
+}
+
+async function purgeEmployee(empId, name){
+  const pw = prompt(`"${name}" 님의 데이터를 완전히 삭제합니다.\n이 작업은 절대 되돌릴 수 없습니다.\n\n계속하려면 비밀번호를 입력하세요.`);
+  if(pw === null) return;
+  if(pw !== '1492'){ toast('비밀번호가 올바르지 않습니다.'); return; }
+  if(!confirm(`정말로 "${name}" 님의 모든 정보(개인정보, 서류, 급여 정보 포함)를 영구 삭제하시겠습니까?\n\n마지막 확인입니다.`)) return;
+
+  toast('삭제 중입니다...');
+  try{
+    await deleteStorageFolder(storage.ref(`hr/${empId}`));
+    const privateRef = db.collection('employees').doc(empId).collection('private');
+    await privateRef.doc('residentFront').delete().catch(()=>{});
+    await privateRef.doc('residentBack').delete().catch(()=>{});
+    await privateRef.doc('files').delete().catch(()=>{});
+    await privateRef.doc('compensation').delete().catch(()=>{});
+    await db.collection('employees').doc(empId).delete();
+    toast('완전히 삭제되었습니다.');
+  }catch(err){
+    toast('삭제 실패: ' + err.message);
+  }
+}
 
 async function changeStatus(empId, name, newStatus, confirmMsg){
   if(!confirm(confirmMsg)) return;
@@ -623,8 +665,10 @@ const CATEGORY1_ITEMS = [
 let filesUnsub = null;
 let empUnsub = null;
 let compUnsub = null;
+let personalInfoUnsub = null;
 let empDataCache = {};
 let filesDataCache = {};
+let personalInfoValuesCache = {};
 let severanceEntries = [];
 const STATUS_LABEL_MAP = {active:'재직중', retired:'퇴직', deleted:'삭제됨'};
 
@@ -653,7 +697,8 @@ function loadEmployeeDetail(empId){
 
   if(empUnsub) { empUnsub(); empUnsub = null; }
   if(filesUnsub) { filesUnsub(); filesUnsub = null; }
-  empDataCache = {}; filesDataCache = {};
+  if(personalInfoUnsub) { personalInfoUnsub(); personalInfoUnsub = null; }
+  empDataCache = {}; filesDataCache = {}; personalInfoValuesCache = {};
 
   empUnsub = db.collection('employees').doc(empId).onSnapshot(doc => {
     const emp = doc.data() || {};
@@ -662,12 +707,23 @@ function loadEmployeeDetail(empId){
     $('detailPhone').textContent = emp.phone || '-';
     const status = emp.status || 'active';
     $('detailStatusTag').innerHTML = `<span class="tag">${STATUS_LABEL_MAP[status]||status}</span>`;
-    renderPersonalInfoFields(emp.personalInfo || {});
+    renderPersonalSection();
     renderResidentStatus(emp.personalInfo || {});
     renderFileSections();
   }, err => {
     toast('직원 정보 로드 실패: ' + err.message);
   });
+
+  if(!isAnonymousUser){
+    // 익명(자기 등록 링크) 사용자는 개인정보 실제 값을 절대 조회할 수 없음 - 값 문서 자체를 구독하지 않음
+    personalInfoUnsub = db.collection('employees').doc(empId).collection('private').doc('personalInfo')
+      .onSnapshot(snap => {
+        personalInfoValuesCache = snap.exists ? snap.data() : {};
+        renderPersonalSection();
+      }, err => {
+        toast('개인정보 로드 실패: ' + err.message);
+      });
+  }
 
   if(isAdminUser){
     filesUnsub = db.collection('employees').doc(empId).collection('private').doc('files')
@@ -691,17 +747,30 @@ function loadEmployeeDetail(empId){
   }
 }
 
-function renderPersonalInfoFields(personalInfo){
+function renderPersonalSection(){
+  const flags = empDataCache.personalInfo || {};
+  renderPersonalInfoFields(flags, personalInfoValuesCache);
+}
+
+function renderPersonalInfoFields(flags, values){
   const wrap = $('personalInfoFields');
   wrap.innerHTML = '';
   PERSONAL_FIELDS.forEach(f => {
-    const val = personalInfo[f.key] || '';
+    const filled = !!flags[f.key + 'Filled'];
     const div = document.createElement('div');
     div.className = 'field';
-    div.innerHTML = `
-      <label>${f.label}</label>
-      <input type="${f.type || 'text'}" data-key="${f.key}" value="${escapeHtml(val)}" />
-    `;
+    if(isAnonymousUser){
+      div.innerHTML = `
+        <label>${f.label} <span class="tag" style="margin-left:4px;">${filled ? '입력됨' : '미입력'}</span></label>
+        <input type="${f.type || 'text'}" data-key="${f.key}" value="" placeholder="${filled ? '재입력 시 덮어쓰기' : ''}" />
+      `;
+    } else {
+      const val = (values && values[f.key]) || '';
+      div.innerHTML = `
+        <label>${f.label}</label>
+        <input type="${f.type || 'text'}" data-key="${f.key}" value="${escapeHtml(val)}" />
+      `;
+    }
     wrap.appendChild(div);
   });
 }
@@ -709,13 +778,32 @@ function renderPersonalInfoFields(personalInfo){
 $('savePersonalBtn').onclick = async () => {
   if(!currentEmpId) return;
   const inputs = document.querySelectorAll('#personalInfoFields input');
-  const updates = {};
+  const valueUpdates = {};
+  const flagUpdates = {};
   inputs.forEach(inp => {
-    updates['personalInfo.' + inp.dataset.key] = inp.value.trim();
+    const key = inp.dataset.key;
+    const val = inp.value.trim();
+    if(isAnonymousUser){
+      // 익명 사용자는 값이 있는 항목만 반영 (보이지 않는 기존 값을 실수로 지우지 않도록)
+      if(val !== ''){
+        valueUpdates[key] = val;
+        flagUpdates['personalInfo.' + key + 'Filled'] = true;
+      }
+    } else {
+      valueUpdates[key] = val;
+      flagUpdates['personalInfo.' + key + 'Filled'] = (val !== '');
+    }
   });
   try{
-    await db.collection('employees').doc(currentEmpId).update(updates);
+    if(Object.keys(valueUpdates).length){
+      await db.collection('employees').doc(currentEmpId).collection('private').doc('personalInfo')
+        .set(valueUpdates, {merge:true});
+    }
+    if(Object.keys(flagUpdates).length){
+      await db.collection('employees').doc(currentEmpId).update(flagUpdates);
+    }
     toast('저장되었습니다.');
+    if(isAnonymousUser) renderPersonalSection();
   }catch(err){
     toast('저장 실패: ' + err.message);
   }
