@@ -116,7 +116,7 @@
 
   .file-slot{margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--border);}
   .file-slot:last-child{border-bottom:none;}
-  .file-slot .label-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .label-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;}
   .file-slot .label{font-weight:700; font-size:13px;}
   .file-status{font-size:12px; color:var(--ok); font-weight:600;}
   .file-status.empty{color:var(--muted); font-weight:400;}
@@ -155,6 +155,17 @@
   .resident-row{display:flex; align-items:center; gap:8px;}
   .resident-row input{max-width:140px;}
   .resident-sep{color:var(--muted); font-weight:700;}
+
+  /* 셀프서비스(직원 개별 링크) 모드 */
+  body.self-mode .top-actions, body.self-mode #statusTabs, body.self-mode .search-bar,
+  body.self-mode .back-link, body.self-mode header .userinfo, body.self-mode #detailStatusTag{
+    display:none !important;
+  }
+  body.self-mode header .title{cursor:default;}
+  .self-banner{
+    background:#fff6ee; border:1px solid var(--accent); border-radius:var(--radius-sm);
+    padding:14px 16px; margin-bottom:16px; font-size:13px; color:var(--navy-dark); line-height:1.6;
+  }
 </style>
 </head>
 <body>
@@ -207,8 +218,15 @@
     <div id="detailView" class="hidden">
       <span class="back-link" id="backToListBtn">&larr; 목록으로</span>
 
+      <div class="self-banner hidden" id="selfBanner">
+        본인 정보와 서류를 입력·업로드해주세요. 저장하시면 바로 관리자에게 전달됩니다.
+      </div>
+
       <div class="card">
-        <h3 id="detailName">-</h3>
+        <div class="label-row">
+          <h3 id="detailName" style="border:none; margin:0; padding:0;">-</h3>
+          <button class="btn small secondary hidden" id="copySelfLinkBtn">등록 링크 복사</button>
+        </div>
         <div class="field"><label>전번</label><div id="detailPhone">-</div></div>
         <div id="detailStatusTag"></div>
       </div>
@@ -351,6 +369,16 @@ const storage = firebase.storage();
 let currentEmpId = null;
 let isAdminUser = false;
 let currentTab = 'active'; // active | retired | deleted(admin only)
+const selfServiceEmpId = new URLSearchParams(location.search).get('self');
+
+if(selfServiceEmpId){
+  document.body.classList.add('self-mode');
+  hide($('loginScreen'));
+  auth.signInAnonymously().catch(err => {
+    show($('loginScreen'));
+    $('loginError').textContent = "접속 실패: " + err.message;
+  });
+}
 
 // ---------- Utilities ----------
 function toast(msg){
@@ -410,6 +438,15 @@ $('logoutBtn').onclick = () => auth.signOut();
 
 auth.onAuthStateChanged(user => {
   if(user){
+    if(selfServiceEmpId){
+      isAdminUser = false;
+      hide($('loginScreen'));
+      show($('appScreen'));
+      document.querySelector('header .title').textContent = '자라다 인사정보 등록';
+      show($('selfBanner'));
+      showDetailView(selfServiceEmpId);
+      return;
+    }
     isAdminUser = (user.email === ADMIN_EMAIL);
     $('userEmail').textContent = user.email || '';
     $('roleBadge').innerHTML = isAdminUser
@@ -427,8 +464,10 @@ auth.onAuthStateChanged(user => {
 });
 
 // ---------- Navigation ----------
-$('homeBtn').onclick = showListView;
-$('backToListBtn').onclick = showListView;
+if(!selfServiceEmpId){
+  $('homeBtn').onclick = showListView;
+  $('backToListBtn').onclick = showListView;
+}
 
 function showListView(){
   currentEmpId = null;
@@ -557,6 +596,7 @@ $('createEmpBtn').onclick = async () => {
 
 // ---------- Personal Info Field Definitions (직원도 열람/수정 가능) ----------
 const PERSONAL_FIELDS = [
+  {key:'email', label:'이메일'},
   {key:'address', label:'주소'},
   {key:'bankAccount', label:'계좌번호'},
   {key:'guardianName', label:'보호자 성명'},
@@ -596,6 +636,21 @@ function renderFileSections(){
 }
 
 function loadEmployeeDetail(empId){
+  if(!selfServiceEmpId){
+    show($('copySelfLinkBtn'));
+    $('copySelfLinkBtn').onclick = () => {
+      const url = `${location.origin}${location.pathname}?self=${empId}`;
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(() => toast('링크가 복사되었습니다.'))
+          .catch(() => toast('복사 실패. 직접 선택해 복사해주세요: ' + url));
+      } else {
+        toast(url);
+      }
+    };
+  } else {
+    hide($('copySelfLinkBtn'));
+  }
+
   if(empUnsub) { empUnsub(); empUnsub = null; }
   if(filesUnsub) { filesUnsub(); filesUnsub = null; }
   empDataCache = {}; filesDataCache = {};
@@ -737,7 +792,7 @@ function renderCat1(filesData, uploadStatus){
 
     const statusHtml = isAdminUser
       ? (fileInfo
-          ? `<span class="file-status">✔ ${escapeHtml(fileInfo.name||'업로드됨')}</span> <button class="btn small secondary" data-dl>다운로드</button>`
+          ? `<span class="file-status">✔ ${escapeHtml(fileInfo.name||'업로드됨')}</span> <button class="btn small secondary" data-dl>다운로드</button> <button class="btn small danger" data-del>삭제</button>`
           : `<span class="file-status empty">미업로드</span>`)
       : (uploadStatus[item.key]
           ? `<span class="file-status">✔ 이미 등록됨 (열람은 관리자만 가능)</span>`
@@ -768,6 +823,8 @@ function renderCat1(filesData, uploadStatus){
     if(isAdminUser && fileInfo){
       const dlBtn = slot.querySelector('button[data-dl]');
       if(dlBtn) dlBtn.onclick = () => downloadFile(fileInfo.path, fileInfo.name);
+      const delBtn = slot.querySelector('button[data-del]');
+      if(delBtn) delBtn.onclick = () => deleteCategory1File(item.key, item.label, fileInfo);
     }
   });
 }
@@ -803,13 +860,15 @@ function renderCat2(filesArr, uploadStatus){
     if(!filesArr || filesArr.length === 0){
       wrap.innerHTML = '<div style="color:var(--muted); font-size:13px;">업로드된 파일이 없습니다.</div>';
     } else {
-      filesArr.forEach(f => {
+      filesArr.forEach((f, idx) => {
         const row = document.createElement('div');
         row.className = 'file-slot';
         row.style.paddingBottom = '8px';
         row.innerHTML = `<div class="label-row"><div class="label">${escapeHtml(f.name)}</div>
-          <button class="btn small secondary">다운로드</button></div>`;
-        row.querySelector('button').onclick = () => downloadFile(f.path, f.name);
+          <div><button class="btn small secondary" data-dl>다운로드</button>
+          <button class="btn small danger" data-del>삭제</button></div></div>`;
+        row.querySelector('button[data-dl]').onclick = () => downloadFile(f.path, f.name);
+        row.querySelector('button[data-del]').onclick = () => deleteCategory2File(idx, f);
         wrap.appendChild(row);
       });
     }
@@ -860,7 +919,7 @@ function renderCat3(filesArr, uploadStatus){
     if(!filesArr || filesArr.length === 0){
       wrap.innerHTML = '<div style="color:var(--muted); font-size:13px;">등록된 항목이 없습니다.</div>';
     } else {
-      filesArr.forEach(f => {
+      filesArr.forEach((f, idx) => {
         const row = document.createElement('div');
         row.className = 'file-slot';
         row.style.paddingBottom = '8px';
@@ -868,9 +927,11 @@ function renderCat3(filesArr, uploadStatus){
             <div><div class="label">${escapeHtml(f.label)}</div>
             ${f.description ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(f.description)}</div>` : ''}
             </div>
-            <button class="btn small secondary">다운로드</button>
+            <div><button class="btn small secondary" data-dl>다운로드</button>
+            <button class="btn small danger" data-del>삭제</button></div>
           </div>`;
-        row.querySelector('button').onclick = () => downloadFile(f.path, f.name);
+        row.querySelector('button[data-dl]').onclick = () => downloadFile(f.path, f.name);
+        row.querySelector('button[data-del]').onclick = () => deleteCategory3File(idx, f);
         wrap.appendChild(row);
       });
     }
@@ -928,6 +989,55 @@ $('addEtcBtn').onclick = () => {
   makeDropzone(zone, files => { if(files[0]) doUpload(files[0]); });
   $(id+'_btn').onclick = () => { if(fileInput.files[0]) doUpload(fileInput.files[0]); else toast('파일을 선택하세요.'); };
 };
+
+// ---------- 파일 삭제 (관리자 전용) ----------
+async function deleteCategory1File(key, label, fileInfo){
+  if(!confirm(`"${label}" 파일을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+  try{
+    if(fileInfo && fileInfo.path){
+      await storage.ref(fileInfo.path).delete().catch(()=>{});
+    }
+    await db.collection('employees').doc(currentEmpId).collection('private').doc('files')
+      .update({[`category1.${key}`]: firebase.firestore.FieldValue.delete()});
+    await db.collection('employees').doc(currentEmpId)
+      .update({[`uploadStatus.${key}`]: false});
+    toast('삭제되었습니다.');
+  }catch(err){
+    toast('삭제 실패: ' + err.message);
+  }
+}
+
+async function deleteCategory2File(idx, fileInfo){
+  if(!confirm(`"${fileInfo.name}" 파일을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+  try{
+    if(fileInfo && fileInfo.path){
+      await storage.ref(fileInfo.path).delete().catch(()=>{});
+    }
+    const arr = (filesDataCache.category2 || []).slice();
+    arr.splice(idx, 1);
+    await db.collection('employees').doc(currentEmpId).collection('private').doc('files')
+      .update({category2: arr});
+    toast('삭제되었습니다.');
+  }catch(err){
+    toast('삭제 실패: ' + err.message);
+  }
+}
+
+async function deleteCategory3File(idx, fileInfo){
+  if(!confirm(`"${fileInfo.label}" 항목을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+  try{
+    if(fileInfo && fileInfo.path){
+      await storage.ref(fileInfo.path).delete().catch(()=>{});
+    }
+    const arr = (filesDataCache.category3 || []).slice();
+    arr.splice(idx, 1);
+    await db.collection('employees').doc(currentEmpId).collection('private').doc('files')
+      .update({category3: arr});
+    toast('삭제되었습니다.');
+  }catch(err){
+    toast('삭제 실패: ' + err.message);
+  }
+}
 
 // ---------- Download (관리자 전용, Storage 규칙으로도 강제) ----------
 async function downloadFile(path, name){
