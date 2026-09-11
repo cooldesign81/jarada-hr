@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
   /* 자라다(jarada.co.kr) 브랜드 톤 - 딥 네이비 + 웜 오렌지 포인트, 부드러운 라운드 카드 */
@@ -56,6 +57,8 @@
   .card h3{margin:0 0 14px 0; font-size:15px; color:var(--navy-dark); border-bottom:2px solid var(--accent); padding-bottom:9px; font-weight:800;}
   .row{display:flex; gap:10px; flex-wrap:wrap;}
   .field{flex:1 1 220px; margin-bottom:10px;}
+  .field.wide{flex:1 1 100%;}
+  .field.narrow{flex:0 1 150px; max-width:170px;}
   .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600;}
   .field input, .field select, .field textarea{
     width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px;
@@ -174,17 +177,17 @@
 <div id="loginScreen">
   <div class="card">
     <h2>자라다 인사관리</h2>
-    <button class="btn" style="width:100%" id="googleLoginBtn">Google로 로그인 (관리자)</button>
+    <button class="btn" style="width:100%" id="googleLoginBtn">Google로 로그인 (대표자)</button>
     <div class="divider">또는</div>
     <div class="field">
-      <label>이메일 (직원 공용 계정)</label>
-      <input type="email" id="staffEmail" placeholder="staff@example.com" />
+      <label>이메일 (관리자 공용 계정)</label>
+      <input type="email" id="staffEmail" placeholder="admin@example.com" />
     </div>
     <div class="field">
       <label>비밀번호</label>
       <input type="password" id="staffPassword" placeholder="비밀번호" />
     </div>
-    <button class="btn secondary" style="width:100%" id="staffLoginBtn">직원 계정으로 로그인</button>
+    <button class="btn secondary" style="width:100%" id="staffLoginBtn">관리자 계정으로 로그인</button>
     <div id="loginError" style="color:var(--danger); font-size:12px; margin-top:10px;"></div>
   </div>
 </div>
@@ -206,6 +209,8 @@
     <div id="listView">
       <div class="top-actions">
         <button class="btn accent" id="newEmpBtn">+ 신규 직원 등록</button>
+        <button class="btn secondary" id="noticeBtn">공지사항</button>
+        <button class="btn secondary hidden" id="exportExcelBtn">엑셀로 내보내기</button>
       </div>
       <div class="tabs" id="statusTabs"></div>
       <div class="search-bar">
@@ -220,6 +225,11 @@
 
       <div class="self-banner hidden" id="selfBanner">
         본인 정보와 서류를 입력·업로드해주세요. 저장하시면 바로 관리자에게 전달됩니다.
+      </div>
+
+      <div class="card hidden" id="selfNoticesCard">
+        <h3>공지사항</h3>
+        <div id="selfNoticesList"></div>
       </div>
 
       <div class="card">
@@ -322,6 +332,35 @@
       </div>
 
     </div>
+
+    <!-- NOTICE VIEW -->
+    <div id="noticeView" class="hidden">
+      <span class="back-link" id="backFromNoticeBtn">&larr; 목록으로</span>
+
+      <div class="top-actions">
+        <button class="btn accent hidden" id="openNoticeModalBtn">+ 새 공지 등록</button>
+      </div>
+
+      <div id="noticeList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- NEW NOTICE MODAL -->
+<div id="noticeModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>공지사항 등록</h3>
+    <div class="field"><label>제목</label><input type="text" id="noticeTitleInput" /></div>
+    <div class="field"><label>내용</label><textarea id="noticeBodyInput" rows="5"></textarea></div>
+    <div class="dropzone" id="noticeFileDropzone">
+      <div class="dz-title">📎 첨부파일을 끌어다 놓거나 클릭해서 선택 (여러 개 가능)</div>
+      <input type="file" id="noticeFileInput" multiple />
+    </div>
+    <div id="noticeAttachPreview" style="margin-top:8px; font-size:12px; color:var(--muted);"></div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="btn accent" id="postNoticeBtn" style="flex:1;">등록</button>
+      <button class="btn secondary" id="cancelNoticeBtn" style="flex:1;">취소</button>
+    </div>
   </div>
 </div>
 
@@ -359,7 +398,16 @@ const firebaseConfig = {
   appId: "1:1069236694564:web:17ce7ffa10b00e0074b2b1"
 };
 
-const ADMIN_EMAIL = "jinhyuck@gmail.com";
+const SUPER_ADMIN_EMAIL = "jinhyuck@gmail.com"; // 대표자 계정 (Google) - 전체 권한
+const MANAGER_EMAIL = "jarada_boys@naver.com"; // 관리자 공용 계정 (이메일) - 제한된 권한
+const CATEGORY1_LIMITED_KEYS = ['resume', 'portfolio', 'criminalRecord', 'diploma'];
+
+function canDownloadCategory1(key){
+  return isAdminUser || (isManagerUser && CATEGORY1_LIMITED_KEYS.includes(key));
+}
+function canDeleteCategory1(key){
+  return canDownloadCategory1(key);
+}
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -368,6 +416,7 @@ const storage = firebase.storage();
 
 let currentEmpId = null;
 let isAdminUser = false;
+let isManagerUser = false;
 let isAnonymousUser = false;
 let currentTab = 'active'; // active | retired | deleted(admin only)
 const selfServiceEmpId = new URLSearchParams(location.search).get('self');
@@ -445,15 +494,19 @@ auth.onAuthStateChanged(user => {
       show($('appScreen'));
       document.querySelector('header .title').textContent = '자라다 인사정보 등록';
       show($('selfBanner'));
+      show($('selfNoticesCard'));
+      listenNotices($('selfNoticesList'), false);
       showDetailView(selfServiceEmpId);
       return;
     }
 
-    isAdminUser = (user.email === ADMIN_EMAIL);
+    isAdminUser = (user.email === SUPER_ADMIN_EMAIL);
+    isManagerUser = (user.email === MANAGER_EMAIL);
     $('userEmail').textContent = user.email || '';
-    $('roleBadge').innerHTML = isAdminUser
+    $('roleBadge').innerHTML = (isAdminUser || isManagerUser)
       ? '<span class="badge-admin">관리자</span>'
       : '<span class="badge-staff">직원</span>';
+    $('exportExcelBtn').classList.toggle('hidden', !isAdminUser);
     hide($('loginScreen'));
     show($('appScreen'));
     renderTabs();
@@ -476,18 +529,30 @@ auth.onAuthStateChanged(user => {
 if(!selfServiceEmpId){
   $('homeBtn').onclick = showListView;
   $('backToListBtn').onclick = showListView;
+  $('noticeBtn').onclick = showNoticeView;
+  $('backFromNoticeBtn').onclick = showListView;
 }
 
 function showListView(){
   currentEmpId = null;
   hide($('detailView'));
+  hide($('noticeView'));
   show($('listView'));
 }
 function showDetailView(empId){
   currentEmpId = empId;
   hide($('listView'));
+  hide($('noticeView'));
   show($('detailView'));
   loadEmployeeDetail(empId);
+}
+function showNoticeView(){
+  currentEmpId = null;
+  hide($('listView'));
+  hide($('detailView'));
+  show($('noticeView'));
+  $('openNoticeModalBtn').classList.toggle('hidden', !(isAdminUser || isManagerUser));
+  listenNotices($('noticeList'), true);
 }
 
 // ---------- Tabs ----------
@@ -497,7 +562,7 @@ function renderTabs(){
     {key:'active', label:'재직자'},
     {key:'retired', label:'퇴직자'},
   ];
-  if(isAdminUser) tabs.push({key:'deleted', label:'삭제됨'});
+  if(isAdminUser || isManagerUser) tabs.push({key:'deleted', label:'삭제됨'});
   wrap.innerHTML = '';
   tabs.forEach(t => {
     const btn = document.createElement('button');
@@ -544,8 +609,8 @@ function renderEmployeeList(){
       actionsHtml = `<button class="btn small secondary" data-act="reinstate">복직</button>
                       <button class="btn small danger" data-act="delete">삭제</button>`;
     } else if(currentTab === 'deleted'){
-      actionsHtml = `<button class="btn small secondary" data-act="restore">복원</button>
-                      <button class="btn small danger" data-act="purge">완전 삭제</button>`;
+      actionsHtml = `<button class="btn small secondary" data-act="restore">복원</button>`
+        + (isAdminUser ? `<button class="btn small danger" data-act="purge">완전 삭제</button>` : '');
     }
     div.innerHTML = `
       <div class="info"><div class="name">${escapeHtml(e.name||'')}</div><div class="phone">${escapeHtml(e.phone||'')}</div></div>
@@ -600,6 +665,64 @@ async function purgeEmployee(empId, name){
   }
 }
 
+// ---------- 엑셀 내보내기 (대표자 전용) ----------
+$('exportExcelBtn').onclick = async () => {
+  if(!isAdminUser) return;
+  toast('엑셀 파일 생성 중... (직원 수에 따라 시간이 걸릴 수 있어요)');
+  try{
+    const rows = [];
+    for(const emp of allEmployees){
+      const empRef = db.collection('employees').doc(emp.id);
+      const [personalSnap, frontSnap, backSnap, compSnap] = await Promise.all([
+        empRef.collection('private').doc('personalInfo').get().catch(()=>null),
+        empRef.collection('private').doc('residentFront').get().catch(()=>null),
+        empRef.collection('private').doc('residentBack').get().catch(()=>null),
+        empRef.collection('private').doc('compensation').get().catch(()=>null),
+      ]);
+      const pi = (personalSnap && personalSnap.exists) ? personalSnap.data() : {};
+      const front = (frontSnap && frontSnap.exists) ? (frontSnap.data().value || '') : '';
+      const back = (backSnap && backSnap.exists) ? (backSnap.data().value || '') : '';
+      const comp = (compSnap && compSnap.exists) ? compSnap.data() : {};
+      const severanceStr = (comp.severanceSettlements || [])
+        .map(s => `${s.year||''}-${s.month||''}-${s.day||''}: ${s.amount||''}원`).join(' / ');
+
+      rows.push({
+        '이름': emp.name || '',
+        '전번': emp.phone || '',
+        '상태': STATUS_LABEL_MAP[emp.status || 'active'] || emp.status,
+        '이메일': pi.email || '',
+        '주소': pi.address || '',
+        '계좌번호': pi.bankAccount || '',
+        '보호자 성명': pi.guardianName || '',
+        '보호자와의 관계': pi.guardianRelation || '',
+        '보호자 연락처': pi.guardianPhone || '',
+        '교육시작일': pi.eduStartDate || '',
+        '근로시작일': pi.workStartDate || '',
+        '4대보험 등록일': pi.insuranceRegDate || '',
+        '퇴사일': pi.resignDate || '',
+        '주민번호 앞자리': front,
+        '주민번호 뒷자리': back,
+        '기본급': comp.baseSalary || '',
+        '식대': comp.mealAllowance || '',
+        '추가급여': comp.additionalSalary || '',
+        '인센티브 초과기준': comp.incentiveThreshold || '',
+        '인센티브 금액': comp.incentiveAmount || '',
+        '기타 급여': comp.otherSalary || '',
+        '퇴직금 중간정산': severanceStr,
+        '메모': comp.memo || ''
+      });
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '직원정보');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `자라다_직원정보_${dateStr}.xlsx`);
+    toast('엑셀 파일이 다운로드되었습니다.');
+  }catch(err){
+    toast('내보내기 실패: ' + err.message);
+  }
+};
+
 async function changeStatus(empId, name, newStatus, confirmMsg){
   if(!confirm(confirmMsg)) return;
   try{
@@ -639,20 +762,20 @@ $('createEmpBtn').onclick = async () => {
 // ---------- Personal Info Field Definitions (직원도 열람/수정 가능) ----------
 const PERSONAL_FIELDS = [
   {key:'email', label:'이메일'},
-  {key:'address', label:'주소'},
+  {key:'address', label:'주소', wide:true},
   {key:'bankAccount', label:'계좌번호'},
   {key:'guardianName', label:'보호자 성명'},
   {key:'guardianRelation', label:'보호자와의 관계'},
   {key:'guardianPhone', label:'보호자 연락처'},
-  {key:'eduStartDate', label:'교육시작일', type:'date'},
-  {key:'workStartDate', label:'근로시작일', type:'date'},
-  {key:'insuranceRegDate', label:'4대보험 등록일', type:'date'},
-  {key:'resignDate', label:'퇴사일', type:'date'},
+  {key:'eduStartDate', label:'교육시작일', type:'date', narrow:true},
+  {key:'workStartDate', label:'근로시작일', type:'date', narrow:true},
+  {key:'insuranceRegDate', label:'4대보험 등록일', type:'date', narrow:true},
+  {key:'resignDate', label:'퇴사일', type:'date', narrow:true},
 ];
 
 const CATEGORY1_ITEMS = [
-  {key:'resume', label:'이력서', pasteable:true},
-  {key:'portfolio', label:'포트폴리오', pasteable:true},
+  {key:'resume', label:'이력서'},
+  {key:'portfolio', label:'포트폴리오'},
   {key:'criminalRecord', label:'범죄기록조회서'},
   {key:'diploma', label:'졸업증명서'},
   {key:'residentCopy', label:'주민등록등본'},
@@ -714,18 +837,16 @@ function loadEmployeeDetail(empId){
     toast('직원 정보 로드 실패: ' + err.message);
   });
 
-  if(!isAnonymousUser){
-    // 익명(자기 등록 링크) 사용자는 개인정보 실제 값을 절대 조회할 수 없음 - 값 문서 자체를 구독하지 않음
-    personalInfoUnsub = db.collection('employees').doc(empId).collection('private').doc('personalInfo')
-      .onSnapshot(snap => {
-        personalInfoValuesCache = snap.exists ? snap.data() : {};
-        renderPersonalSection();
-      }, err => {
-        toast('개인정보 로드 실패: ' + err.message);
-      });
-  }
+  // 자기 링크로 들어온 직원도 본인 개인정보는 조회 가능 (자기 문서만 접근 가능하므로 안전)
+  personalInfoUnsub = db.collection('employees').doc(empId).collection('private').doc('personalInfo')
+    .onSnapshot(snap => {
+      personalInfoValuesCache = snap.exists ? snap.data() : {};
+      renderPersonalSection();
+    }, err => {
+      toast('개인정보 로드 실패: ' + err.message);
+    });
 
-  if(isAdminUser){
+  if(isAdminUser || isManagerUser){
     filesUnsub = db.collection('employees').doc(empId).collection('private').doc('files')
       .onSnapshot(snap => {
         filesDataCache = snap.exists ? snap.data() : {};
@@ -733,7 +854,9 @@ function loadEmployeeDetail(empId){
       }, err => {
         toast('파일 정보 로드 실패: ' + err.message);
       });
+  }
 
+  if(isAdminUser){
     show($('compensationCard'));
     if(compUnsub) { compUnsub(); compUnsub = null; }
     compUnsub = db.collection('employees').doc(empId).collection('private').doc('compensation')
@@ -756,21 +879,13 @@ function renderPersonalInfoFields(flags, values){
   const wrap = $('personalInfoFields');
   wrap.innerHTML = '';
   PERSONAL_FIELDS.forEach(f => {
-    const filled = !!flags[f.key + 'Filled'];
+    const val = (values && values[f.key]) || '';
     const div = document.createElement('div');
-    div.className = 'field';
-    if(isAnonymousUser){
-      div.innerHTML = `
-        <label>${f.label} <span class="tag" style="margin-left:4px;">${filled ? '입력됨' : '미입력'}</span></label>
-        <input type="${f.type || 'text'}" data-key="${f.key}" value="" placeholder="${filled ? '재입력 시 덮어쓰기' : ''}" />
-      `;
-    } else {
-      const val = (values && values[f.key]) || '';
-      div.innerHTML = `
-        <label>${f.label}</label>
-        <input type="${f.type || 'text'}" data-key="${f.key}" value="${escapeHtml(val)}" />
-      `;
-    }
+    div.className = 'field' + (f.wide ? ' wide' : '') + (f.narrow ? ' narrow' : '');
+    div.innerHTML = `
+      <label>${f.label}</label>
+      <input type="${f.type || 'text'}" data-key="${f.key}" value="${escapeHtml(val)}" />
+    `;
     wrap.appendChild(div);
   });
 }
@@ -783,16 +898,8 @@ $('savePersonalBtn').onclick = async () => {
   inputs.forEach(inp => {
     const key = inp.dataset.key;
     const val = inp.value.trim();
-    if(isAnonymousUser){
-      // 익명 사용자는 값이 있는 항목만 반영 (보이지 않는 기존 값을 실수로 지우지 않도록)
-      if(val !== ''){
-        valueUpdates[key] = val;
-        flagUpdates['personalInfo.' + key + 'Filled'] = true;
-      }
-    } else {
-      valueUpdates[key] = val;
-      flagUpdates['personalInfo.' + key + 'Filled'] = (val !== '');
-    }
+    valueUpdates[key] = val;
+    flagUpdates['personalInfo.' + key + 'Filled'] = (val !== '');
   });
   try{
     if(Object.keys(valueUpdates).length){
@@ -815,26 +922,25 @@ function renderResidentStatus(personalInfo){
   $('residentBackInput').value = '';
   const frontFilled = !!personalInfo.residentFrontFilled;
   const backFilled = !!personalInfo.residentBackFilled;
+  const canSeeFront = isAdminUser || isManagerUser || isAnonymousUser;
 
   const frontLabel = frontFilled
-    ? (isAdminUser ? '앞자리: 등록됨' : '앞자리: 이미 등록됨 (조회 불가)')
+    ? (canSeeFront ? '앞자리: 등록됨' : '앞자리: 이미 등록됨 (조회 불가)')
     : '앞자리: 미등록';
   const backLabel = backFilled
     ? (isAdminUser ? '뒷자리: 등록됨' : '뒷자리: 이미 등록됨 (조회 불가)')
     : '뒷자리: 미등록';
   $('residentStatusLine').textContent = `${frontLabel} · ${backLabel}`;
 
-  if(isAdminUser){
-    if(frontFilled){
-      db.collection('employees').doc(currentEmpId).collection('private').doc('residentFront').get()
-        .then(doc => { if(doc.exists) $('residentFrontInput').value = doc.data().value || ''; })
-        .catch(()=>{});
-    }
-    if(backFilled){
-      db.collection('employees').doc(currentEmpId).collection('private').doc('residentBack').get()
-        .then(doc => { if(doc.exists) $('residentBackInput').value = doc.data().value || ''; })
-        .catch(()=>{});
-    }
+  if(canSeeFront && frontFilled){
+    db.collection('employees').doc(currentEmpId).collection('private').doc('residentFront').get()
+      .then(doc => { if(doc.exists) $('residentFrontInput').value = doc.data().value || ''; })
+      .catch(()=>{});
+  }
+  if(isAdminUser && backFilled){
+    db.collection('employees').doc(currentEmpId).collection('private').doc('residentBack').get()
+      .then(doc => { if(doc.exists) $('residentBackInput').value = doc.data().value || ''; })
+      .catch(()=>{});
   }
 }
 
@@ -873,20 +979,28 @@ function renderCat1(filesData, uploadStatus){
   const wrap = $('cat1List');
   wrap.innerHTML = '';
   uploadStatus = uploadStatus || {};
+  const canSeeFileList = isAdminUser || isManagerUser;
   CATEGORY1_ITEMS.forEach(item => {
     const fileInfo = filesData ? filesData[item.key] : null;
     const slot = document.createElement('div');
     slot.className = 'file-slot';
+    const allowDl = canDownloadCategory1(item.key);
+    const allowDel = canDeleteCategory1(item.key);
 
-    const statusHtml = isAdminUser
-      ? (fileInfo
-          ? `<span class="file-status">✔ ${escapeHtml(fileInfo.name||'업로드됨')}</span> <button class="btn small secondary" data-dl>다운로드</button> <button class="btn small danger" data-del>삭제</button>`
-          : `<span class="file-status empty">미업로드</span>`)
-      : (uploadStatus[item.key]
-          ? `<span class="file-status">✔ 이미 등록됨 (열람은 관리자만 가능)</span>`
-          : `<span class="file-status empty">미등록</span>`);
-
-    const pasteHint = item.pasteable ? '<small class="hint">이 영역 클릭 후 Ctrl+V로 이미지 붙여넣기 가능</small>' : '';
+    let statusHtml;
+    if(canSeeFileList){
+      if(fileInfo){
+        statusHtml = `<span class="file-status">✔ ${escapeHtml(fileInfo.name||'업로드됨')}</span>`
+          + (allowDl ? ` <button class="btn small secondary" data-dl>다운로드</button>` : '')
+          + (allowDel ? ` <button class="btn small danger" data-del>삭제</button>` : '');
+      } else {
+        statusHtml = `<span class="file-status empty">미업로드</span>`;
+      }
+    } else {
+      statusHtml = uploadStatus[item.key]
+        ? `<span class="file-status">✔ 이미 등록됨 (열람은 관리자만 가능)</span>`
+        : `<span class="file-status empty">미등록</span>`;
+    }
 
     slot.innerHTML = `
       <div class="label-row">
@@ -895,7 +1009,6 @@ function renderCat1(filesData, uploadStatus){
       </div>
       <div class="dropzone" data-zone="${item.key}">
         <div class="dz-title">📎 파일을 끌어다 놓거나 클릭해서 선택</div>
-        ${pasteHint}
         <input type="file" data-upload="${item.key}" />
       </div>
     `;
@@ -906,9 +1019,8 @@ function renderCat1(filesData, uploadStatus){
     zone.onclick = (e) => { if(e.target !== input) input.click(); };
     input.onchange = (e) => { if(e.target.files[0]) uploadCategory1File(item.key, item.label, e.target.files[0]); };
     makeDropzone(zone, files => { if(files[0]) uploadCategory1File(item.key, item.label, files[0]); });
-    if(item.pasteable) makePasteZone(zone, files => { if(files[0]) uploadCategory1File(item.key, item.label, files[0]); });
 
-    if(isAdminUser && fileInfo){
+    if(fileInfo){
       const dlBtn = slot.querySelector('button[data-dl]');
       if(dlBtn) dlBtn.onclick = () => downloadFile(fileInfo.path, fileInfo.name);
       const delBtn = slot.querySelector('button[data-del]');
@@ -1125,6 +1237,133 @@ async function deleteCategory3File(idx, fileInfo){
   }catch(err){
     toast('삭제 실패: ' + err.message);
   }
+}
+
+// ---------- 공지사항 ----------
+let noticesListUnsub = null;
+let noticeFilesPending = [];
+
+function listenNotices(container, showManageControls){
+  if(noticesListUnsub){ noticesListUnsub(); noticesListUnsub = null; }
+  noticesListUnsub = db.collection('notices').orderBy('createdAt', 'desc').onSnapshot(snap => {
+    const notices = [];
+    snap.forEach(doc => notices.push({id: doc.id, ...doc.data()}));
+    renderNoticeList(container, notices, showManageControls);
+  }, err => {
+    toast('공지사항 로드 실패: ' + err.message);
+  });
+}
+
+function renderNoticeList(container, notices, showManageControls){
+  container.innerHTML = '';
+  if(!notices.length){
+    container.innerHTML = '<div class="card" style="color:var(--muted); font-size:13px;">등록된 공지사항이 없습니다.</div>';
+    return;
+  }
+  notices.forEach(n => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const dateStr = (n.createdAt && n.createdAt.toDate) ? n.createdAt.toDate().toLocaleDateString('ko-KR') : '';
+    let attachHtml = '';
+    if(n.attachments && n.attachments.length){
+      attachHtml = '<div style="margin-top:10px;">' + n.attachments.map((a, idx) =>
+        `<button class="btn small secondary" data-nfile="${idx}" style="margin:2px 6px 2px 0;">📎 ${escapeHtml(a.name)}</button>`
+      ).join('') + '</div>';
+    }
+    card.innerHTML = `
+      <div class="label-row">
+        <h3 style="border:none; margin:0; padding:0;">${escapeHtml(n.title)}</h3>
+        <span class="tag">${dateStr}</span>
+      </div>
+      <div style="white-space:pre-wrap; font-size:14px; margin-top:8px; line-height:1.6;">${escapeHtml(n.body || '')}</div>
+      ${attachHtml}
+      ${(showManageControls && (isAdminUser || isManagerUser)) ? `<button class="btn small danger" data-ndel style="margin-top:12px;">삭제</button>` : ''}
+    `;
+    if(n.attachments){
+      n.attachments.forEach((a, idx) => {
+        const btn = card.querySelector(`button[data-nfile="${idx}"]`);
+        if(btn) btn.onclick = () => downloadFile(a.path, a.name);
+      });
+    }
+    const delBtn = card.querySelector('button[data-ndel]');
+    if(delBtn) delBtn.onclick = () => deleteNotice(n);
+    container.appendChild(card);
+  });
+}
+
+async function deleteNotice(n){
+  if(!confirm(`"${n.title}" 공지사항을 삭제하시겠습니까?`)) return;
+  try{
+    if(n.attachments && n.attachments.length){
+      for(const a of n.attachments){
+        await storage.ref(a.path).delete().catch(()=>{});
+      }
+    }
+    await db.collection('notices').doc(n.id).delete();
+    toast('삭제되었습니다.');
+  }catch(err){
+    toast('삭제 실패: ' + err.message);
+  }
+}
+
+function renderNoticePendingFiles(){
+  const wrap = $('noticeAttachPreview');
+  wrap.textContent = noticeFilesPending.length
+    ? '첨부 예정: ' + noticeFilesPending.map(f => f.name).join(', ')
+    : '';
+}
+
+(function initNoticeDropzone(){
+  const zone = $('noticeFileDropzone');
+  const input = $('noticeFileInput');
+  if(!zone) return;
+  const addFiles = (files) => { noticeFilesPending.push(...files); renderNoticePendingFiles(); };
+  zone.onclick = (e) => { if(e.target !== input) input.click(); };
+  input.onchange = (e) => { if(e.target.files.length){ addFiles(Array.from(e.target.files)); input.value=''; } };
+  makeDropzone(zone, addFiles);
+})();
+
+$('openNoticeModalBtn').onclick = () => {
+  $('noticeTitleInput').value = '';
+  $('noticeBodyInput').value = '';
+  noticeFilesPending = [];
+  renderNoticePendingFiles();
+  show($('noticeModal'));
+};
+$('cancelNoticeBtn').onclick = () => hide($('noticeModal'));
+
+if($('postNoticeBtn')){
+  $('postNoticeBtn').onclick = async () => {
+    const title = $('noticeTitleInput').value.trim();
+    const body = $('noticeBodyInput').value.trim();
+    if(!title){ toast('제목을 입력하세요.'); return; }
+    toast('등록 중...');
+    try{
+      const docRef = await db.collection('notices').add({
+        title, body,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: auth.currentUser.email,
+        attachments: []
+      });
+      const attachments = [];
+      for(const file of noticeFilesPending){
+        const path = `notices/${docRef.id}/${Date.now()}_${file.name}`;
+        await storage.ref(path).put(file);
+        attachments.push({name: file.name, path});
+      }
+      if(attachments.length){
+        await docRef.update({attachments});
+      }
+      $('noticeTitleInput').value = '';
+      $('noticeBodyInput').value = '';
+      noticeFilesPending = [];
+      renderNoticePendingFiles();
+      hide($('noticeModal'));
+      toast('공지사항이 등록되었습니다.');
+    }catch(err){
+      toast('등록 실패: ' + err.message);
+    }
+  };
 }
 
 // ---------- Download (관리자 전용, Storage 규칙으로도 강제) ----------
